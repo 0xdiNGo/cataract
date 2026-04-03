@@ -10,16 +10,19 @@ graph BT
     Debris[Debris Generator]
     Damage[Damage]
     Progression[Progression]
-    Renderer[Renderer]
+    Renderer[Three.js Renderer]
     HUD[HUD]
     State[Game State]
-    Audio[Audio]
+    Audio[Web Audio]
+    Net[WebRTC Networking]
 
     Physics --> State
     Physics --> Input
+    Physics --> Net
     Combat --> State
     Combat --> Input
     Combat --> Physics
+    Combat --> Net
     Debris --> State
     Debris --> Physics
     Damage --> State
@@ -37,11 +40,14 @@ graph BT
     Audio --> State
     Audio --> Combat
     Audio --> Damage
+    Net --> State
+    Net --> Input
 ```
 
 ## Dependency Notes
 
 - **Game State** is the root dependency — nearly everything reads from it.
 - **Input** has no dependencies; it only produces events.
-- **Renderer** and **HUD** are leaf consumers — nothing depends on them.
-- **Audio** is a leaf consumer driven by combat and damage events.
+- **WebRTC Networking** reads from State (to broadcast snapshots) and writes to Input (remote player inputs).
+- **Physics** and **Combat** consume remote input via the Networking module.
+- **Three.js Renderer**, **HUD**, and **Web Audio** are leaf consumers — nothing depends on them.

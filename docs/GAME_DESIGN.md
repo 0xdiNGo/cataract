@@ -2,9 +2,11 @@
 
 ## Game Concept
 
-You pilot a lone deep-space probe through the **Oort Cloud**—humanity's first expedition into the primordial debris field at the solar system's edge. The cloud is a cascading torrent of ancient icy bodies, cometary fragments, and stellar remnants left over from the solar system's formation billions of years ago.
+You pilot a deep-space probe through the **Oort Cloud**—humanity's first expedition into the primordial debris field at the solar system's edge. The cloud is a cascading torrent of ancient icy bodies, cometary fragments, and stellar remnants left over from the solar system's formation billions of years ago.
 
 Your mission: navigate deeper into the cloud, destroy threatening debris before it damages your ship, and survive as long as possible while collecting data and resources.
+
+Play solo or bring friends — Cataract supports **cooperative multiplayer** where up to 4 players share the same debris field and work together to survive.
 
 ---
 
@@ -65,6 +67,27 @@ Your mission: navigate deeper into the cloud, destroy threatening debris before 
 | **Mid** | Denser fields, faster rocks, shield regen slows |
 | **Late** | Chaotic maelstrom, massive boulders, one mistake kills you |
 | **Endless** | No end state—pure survival arcade mode |
+
+---
+
+## Cooperative Multiplayer
+
+- **Up to 4 players** in the same debris field via peer-to-peer WebRTC (no server needed)
+- **Host/join model:** Host generates an invite code, friends paste it to connect
+- **Shared depth meter** — the team advances together
+- **Team scoring** with individual contribution tracking
+- **Protect each other** by destroying debris in teammates' paths
+- **Respawn on death** — co-op is about teamwork, not permadeath. Brief invulnerability on respawn.
+- **If the host disconnects, the session ends** (no host migration in v1)
+
+---
+
+## Technical Platform
+
+- Runs in any modern web browser — no install, no plugins
+- Single `index.html` file, hostable on GitHub Pages
+- Three.js for 3D rendering (loaded via CDN)
+- Procedural audio via Web Audio API — no sound files to load
 
 ---
 
