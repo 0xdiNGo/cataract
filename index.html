@@ -245,7 +245,7 @@ body {
   <div class="status" id="sdp-status"></div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.168.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 <script>
 "use strict";
 
@@ -965,6 +965,7 @@ const debrisGeometries = [];
 
 // Pre-create a few debris geometries for variety
 function initDebrisGeometries() {
+  if (debrisGeometries.length > 0) return;
   debrisGeometries.push(new THREE.IcosahedronGeometry(1, 1));
   debrisGeometries.push(new THREE.IcosahedronGeometry(1, 0));
   debrisGeometries.push(new THREE.DodecahedronGeometry(1, 0));
