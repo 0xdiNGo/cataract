@@ -10,3 +10,4 @@
 - Chose tech stack: single-file browser game, Three.js via CDN, WebRTC P2P co-op multiplayer, Web Audio API (ADR-0001, ADR-0002)
 - Added networking diagram and updated all diagrams for multiplayer architecture
 - Modeled after [SpaceBashers](https://github.com/0xdiNGo/spacebashers) single-file approach
+- **Implemented full game in `index.html`**: Three.js 3D scene, player ship, debris field generator, pulse cannon combat, shield/hull damage, procedural audio, HUD, game states, and WebRTC co-op multiplayer

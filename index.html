@@ -1,0 +1,1842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cataract — Oort Cloud Survival</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #000;
+  overflow: hidden;
+  font-family: 'Courier New', monospace;
+  color: #aaccff;
+  cursor: crosshair;
+}
+#game-canvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+}
+
+/* ── HUD ── */
+#hud {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 5;
+}
+#hud-top {
+  display: flex;
+  justify-content: space-between;
+  padding: 16px 24px;
+}
+#hud-bottom {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+}
+.hud-label { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; opacity: 0.6; }
+.hud-value { font-size: 18px; font-weight: bold; }
+.hud-bar-bg {
+  width: 200px; height: 6px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 3px;
+  margin-top: 4px;
+}
+.hud-bar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.2s;
+}
+#shield-bar { background: #4488ff; }
+#hull-bar { background: #ff4444; }
+#boost-bar { background: #ffaa00; }
+#hud-left, #hud-right { display: flex; flex-direction: column; gap: 8px; }
+#hud-center { text-align: center; }
+#depth-display { font-size: 28px; font-weight: bold; letter-spacing: 4px; }
+#score-display { font-size: 16px; opacity: 0.8; }
+#crosshair {
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 24px; height: 24px;
+  z-index: 6;
+  pointer-events: none;
+}
+#crosshair::before, #crosshair::after {
+  content: '';
+  position: absolute;
+  background: rgba(150,200,255,0.5);
+}
+#crosshair::before {
+  top: 0; left: 50%;
+  width: 1px; height: 100%;
+  transform: translateX(-50%);
+}
+#crosshair::after {
+  top: 50%; left: 0;
+  width: 100%; height: 1px;
+  transform: translateY(-50%);
+}
+#damage-flash {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 4;
+  background: radial-gradient(ellipse at center, transparent 40%, rgba(255,50,50,0.4));
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+/* ── Menus ── */
+#menu-overlay {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,10,0.85);
+}
+#menu-overlay.hidden { display: none; }
+#menu-overlay h1 {
+  font-size: 64px;
+  letter-spacing: 16px;
+  text-transform: uppercase;
+  color: #aaddff;
+  text-shadow: 0 0 30px rgba(100,180,255,0.5);
+  margin-bottom: 8px;
+}
+#menu-overlay .subtitle {
+  font-size: 14px;
+  opacity: 0.5;
+  letter-spacing: 4px;
+  margin-bottom: 48px;
+}
+#menu-overlay button {
+  background: transparent;
+  border: 1px solid rgba(150,200,255,0.3);
+  color: #aaddff;
+  padding: 12px 40px;
+  margin: 6px;
+  font-family: 'Courier New', monospace;
+  font-size: 16px;
+  letter-spacing: 3px;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: all 0.2s;
+}
+#menu-overlay button:hover {
+  background: rgba(100,180,255,0.15);
+  border-color: #aaddff;
+  text-shadow: 0 0 10px rgba(100,180,255,0.5);
+}
+#game-over-stats { margin: 16px 0; opacity: 0.7; font-size: 14px; line-height: 1.8; }
+
+/* ── SDP Overlay ── */
+#sdp-overlay {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,10,0.95);
+  z-index: 20;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+#sdp-overlay.active { display: flex; }
+#sdp-overlay h2 { margin-bottom: 12px; font-size: 18px; color: #aaddff; }
+#sdp-overlay p { color: #668; margin-bottom: 8px; font-size: 13px; max-width: 500px; text-align: center; }
+#sdp-overlay textarea {
+  width: 460px; height: 80px;
+  background: #0a0a14; color: #88aadd; border: 1px solid #334;
+  font-family: 'Courier New', monospace; font-size: 11px;
+  padding: 6px; margin: 4px 0; resize: none;
+}
+#sdp-overlay button {
+  background: #111122; color: #aaddff; border: 1px solid rgba(150,200,255,0.3);
+  padding: 8px 24px; margin: 6px;
+  font-family: 'Courier New', monospace; font-size: 14px; cursor: pointer;
+}
+#sdp-overlay button:hover { background: rgba(100,180,255,0.2); border-color: #aaddff; }
+#sdp-overlay .status { color: #aaddff; margin-top: 8px; font-size: 13px; }
+#sdp-overlay .error { color: #f44; }
+#sdp-overlay .row { display: flex; gap: 8px; }
+
+/* ── Pause ── */
+#pause-overlay {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  z-index: 15;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,10,0.7);
+  font-size: 36px;
+  letter-spacing: 8px;
+}
+#pause-overlay.active { display: flex; }
+</style>
+</head>
+<body>
+
+<canvas id="game-canvas"></canvas>
+
+<div id="hud" class="hidden">
+  <div id="hud-top">
+    <div id="hud-left">
+      <div>
+        <div class="hud-label">Shields</div>
+        <div class="hud-bar-bg"><div class="hud-bar" id="shield-bar"></div></div>
+      </div>
+      <div>
+        <div class="hud-label">Hull</div>
+        <div class="hud-bar-bg"><div class="hud-bar" id="hull-bar"></div></div>
+      </div>
+      <div>
+        <div class="hud-label">Boost</div>
+        <div class="hud-bar-bg"><div class="hud-bar" id="boost-bar"></div></div>
+      </div>
+    </div>
+    <div id="hud-center">
+      <div class="hud-label">Depth</div>
+      <div id="depth-display">0 km</div>
+      <div id="score-display">0</div>
+    </div>
+    <div id="hud-right">
+      <div id="players-hud"></div>
+    </div>
+  </div>
+  <div id="hud-bottom">
+    <div class="hud-label" id="speed-display"></div>
+  </div>
+</div>
+
+<div id="crosshair" class="hidden"></div>
+<div id="damage-flash"></div>
+
+<div id="menu-overlay">
+  <h1>Cataract</h1>
+  <div class="subtitle">Oort Cloud Survival</div>
+  <button onclick="startSolo()">Solo Mission</button>
+  <button onclick="startNetHost()">Host Co-op</button>
+  <button onclick="startNetClient()">Join Co-op</button>
+</div>
+
+<div id="pause-overlay">PAUSED</div>
+
+<div id="sdp-overlay">
+  <h2 id="sdp-title">Co-op Game</h2>
+  <p id="sdp-desc"></p>
+  <textarea id="sdp-out" readonly placeholder="Your code will appear here..."></textarea>
+  <div class="row">
+    <button id="sdp-copy" onclick="copyCode()">Copy Code</button>
+  </div>
+  <p id="sdp-paste-label" style="margin-top:12px"></p>
+  <textarea id="sdp-in" placeholder="Paste code here..."></textarea>
+  <div class="row">
+    <button id="sdp-connect" onclick="submitCode()">Connect</button>
+    <button id="sdp-cancel" onclick="cancelNet()">Cancel</button>
+  </div>
+  <div class="status" id="sdp-status"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.168.0/build/three.min.js"></script>
+<script>
+"use strict";
+
+// ============================================================
+// CONSTANTS & CONFIG
+// ============================================================
+
+const TICK_RATE = 60;
+const SNAPSHOT_RATE = 20;
+const MAX_PLAYERS = 4;
+const PLAYER_COLORS = [0x4488ff, 0x44ff88, 0xff8844, 0xff44aa];
+const PLAYER_NAMES = ["Probe-1", "Probe-2", "Probe-3", "Probe-4"];
+
+// Physics
+const MOVE_SPEED = 40;
+const BOOST_SPEED = 80;
+const FORWARD_SPEED = 30;
+const MOUSE_SENSITIVITY = 0.002;
+const DRIFT_DAMPING = 0.97;
+const BOOST_MAX = 100;
+const BOOST_DRAIN = 30; // per second
+const BOOST_REGEN = 10; // per second
+
+// Combat
+const FIRE_COOLDOWN = 0.15;
+const PROJECTILE_SPEED = 200;
+const PROJECTILE_LIFETIME = 2.0;
+const PROJECTILE_DAMAGE = 25;
+
+// Damage
+const SHIELD_MAX = 100;
+const SHIELD_REGEN = 3; // per second
+const SHIELD_REGEN_DELAY = 3; // seconds after last hit
+const HULL_MAX = 100;
+const COLLISION_SHIELD_DAMAGE = 20;
+const COLLISION_HULL_DAMAGE = 15;
+
+// Debris
+const DEBRIS_SPAWN_DISTANCE = 400;
+const DEBRIS_DESPAWN_DISTANCE = 100;
+const DEBRIS_BASE_COUNT = 60;
+const DEBRIS_PER_KM = 8;
+const DEBRIS_MIN_SIZE = 2;
+const DEBRIS_MAX_SIZE = 20;
+const DEBRIS_HP_PER_SIZE = 10;
+
+// Progression
+const DEPTH_SCALE = 0.01; // units to km
+
+// Camera
+const CHASE_OFFSET = new THREE.Vector3(0, 4, 14);
+const COCKPIT_OFFSET = new THREE.Vector3(0, 0.5, 0.5);
+
+// ============================================================
+// GAME STATE
+// ============================================================
+
+let gameState = "menu"; // menu, playing, paused, gameover
+let netMode = null;     // null, "host", "client"
+let netMyId = 0;
+
+// Local player
+const localPlayer = {
+  position: new THREE.Vector3(0, 0, 0),
+  velocity: new THREE.Vector3(0, 0, 0),
+  rotation: new THREE.Euler(0, 0, 0, "YXZ"),
+  quaternion: new THREE.Quaternion(),
+  shield: SHIELD_MAX,
+  hull: HULL_MAX,
+  boost: BOOST_MAX,
+  score: 0,
+  depth: 0,
+  alive: true,
+  lastHitTime: 0,
+  fireCooldown: 0,
+  respawnTimer: 0,
+  invulnTimer: 0,
+};
+
+// All players (for multiplayer)
+let players = [];
+let projectiles = [];
+let debris = [];
+let explosions = [];
+let depthKm = 0;
+let elapsedTime = 0;
+let cameraMode = "chase"; // "chase" or "cockpit"
+
+// Input
+const keys = {};
+let mouseDX = 0, mouseDY = 0;
+let mouseDown = false;
+let pointerLocked = false;
+
+// Timing
+let lastTime = 0;
+let accumulator = 0;
+const fixedDt = 1 / TICK_RATE;
+
+// ============================================================
+// THREE.JS SCENE SETUP
+// ============================================================
+
+const canvas = document.getElementById("game-canvas");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.8;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x020208);
+scene.fog = new THREE.FogExp2(0x020208, 0.003);
+
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 2000);
+camera.position.set(0, 4, 14);
+
+// Lighting
+const ambientLight = new THREE.AmbientLight(0x334466, 0.4);
+scene.add(ambientLight);
+
+const sunLight = new THREE.DirectionalLight(0xffeedd, 1.0);
+sunLight.position.set(50, 100, 50);
+scene.add(sunLight);
+
+const rimLight = new THREE.DirectionalLight(0x4466aa, 0.3);
+rimLight.position.set(-30, -20, -40);
+scene.add(rimLight);
+
+// Stars
+function createStarfield() {
+  const starsGeo = new THREE.BufferGeometry();
+  const starCount = 3000;
+  const positions = new Float32Array(starCount * 3);
+  const sizes = new Float32Array(starCount);
+  for (let i = 0; i < starCount; i++) {
+    const r = 800 + Math.random() * 400;
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+    positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+    positions[i * 3 + 2] = r * Math.cos(phi);
+    sizes[i] = 0.5 + Math.random() * 2;
+  }
+  starsGeo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  starsGeo.setAttribute("size", new THREE.BufferAttribute(sizes, 1));
+  const starsMat = new THREE.PointsMaterial({
+    color: 0xaabbdd, size: 1.5, sizeAttenuation: false,
+    transparent: true, opacity: 0.7,
+  });
+  return new THREE.Points(starsGeo, starsMat);
+}
+const starfield = createStarfield();
+scene.add(starfield);
+
+// Dust particles (ambient floating particles near player)
+const dustGeo = new THREE.BufferGeometry();
+const dustCount = 500;
+const dustPositions = new Float32Array(dustCount * 3);
+const dustVelocities = [];
+for (let i = 0; i < dustCount; i++) {
+  dustPositions[i * 3] = (Math.random() - 0.5) * 200;
+  dustPositions[i * 3 + 1] = (Math.random() - 0.5) * 200;
+  dustPositions[i * 3 + 2] = (Math.random() - 0.5) * 200;
+  dustVelocities.push(new THREE.Vector3(
+    (Math.random() - 0.5) * 0.5,
+    (Math.random() - 0.5) * 0.5,
+    (Math.random() - 0.5) * 0.5
+  ));
+}
+dustGeo.setAttribute("position", new THREE.BufferAttribute(dustPositions, 3));
+const dustMat = new THREE.PointsMaterial({
+  color: 0x6688aa, size: 0.8, sizeAttenuation: true,
+  transparent: true, opacity: 0.3,
+});
+const dustParticles = new THREE.Points(dustGeo, dustMat);
+scene.add(dustParticles);
+
+// ============================================================
+// PLAYER SHIP
+// ============================================================
+
+function createShipMesh(color) {
+  const group = new THREE.Group();
+
+  // Main body — elongated octahedron
+  const bodyGeo = new THREE.ConeGeometry(0.8, 3.5, 6);
+  bodyGeo.rotateX(Math.PI / 2);
+  const bodyMat = new THREE.MeshStandardMaterial({
+    color: color, metalness: 0.7, roughness: 0.3,
+    emissive: color, emissiveIntensity: 0.1,
+  });
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  group.add(body);
+
+  // Engine glow
+  const engineGeo = new THREE.SphereGeometry(0.5, 8, 8);
+  const engineMat = new THREE.MeshBasicMaterial({
+    color: 0x88ccff, transparent: true, opacity: 0.6,
+  });
+  const engine = new THREE.Mesh(engineGeo, engineMat);
+  engine.position.z = 1.5;
+  engine.name = "engine";
+  group.add(engine);
+
+  // Shield bubble (visible when hit)
+  const shieldGeo = new THREE.SphereGeometry(2.5, 16, 12);
+  const shieldMat = new THREE.MeshBasicMaterial({
+    color: 0x4488ff, transparent: true, opacity: 0,
+    side: THREE.DoubleSide,
+  });
+  const shield = new THREE.Mesh(shieldGeo, shieldMat);
+  shield.name = "shield";
+  group.add(shield);
+
+  return group;
+}
+
+let playerShip = null;
+const remoteShips = {};
+
+function initPlayerShip() {
+  if (playerShip) scene.remove(playerShip);
+  playerShip = createShipMesh(PLAYER_COLORS[netMyId] || 0x4488ff);
+  scene.add(playerShip);
+}
+
+// ============================================================
+// INPUT HANDLING
+// ============================================================
+
+document.addEventListener("keydown", (e) => {
+  keys[e.code] = true;
+  if (e.code === "Escape") {
+    if (gameState === "playing") { gameState = "paused"; showPause(); }
+    else if (gameState === "paused") { gameState = "playing"; hidePause(); }
+  }
+  if (e.code === "KeyV" && gameState === "playing") {
+    cameraMode = cameraMode === "chase" ? "cockpit" : "chase";
+  }
+  if (e.code === "KeyR" && (gameState === "gameover")) {
+    startSolo();
+  }
+});
+
+document.addEventListener("keyup", (e) => { keys[e.code] = false; });
+
+document.addEventListener("mousemove", (e) => {
+  if (!pointerLocked) return;
+  mouseDX += e.movementX;
+  mouseDY += e.movementY;
+});
+
+document.addEventListener("mousedown", (e) => {
+  if (e.button === 0) mouseDown = true;
+  if (gameState === "playing" && !pointerLocked) {
+    canvas.requestPointerLock();
+  }
+});
+
+document.addEventListener("mouseup", (e) => {
+  if (e.button === 0) mouseDown = false;
+});
+
+document.addEventListener("pointerlockchange", () => {
+  pointerLocked = document.pointerLockElement === canvas;
+  document.getElementById("crosshair").classList.toggle("hidden", !pointerLocked);
+});
+
+canvas.addEventListener("click", () => {
+  if (gameState === "playing" && !pointerLocked) {
+    canvas.requestPointerLock();
+  }
+});
+
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ============================================================
+// AUDIO ENGINE
+// ============================================================
+
+let audioCtx = null;
+
+function ensureAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === "suspended") audioCtx.resume();
+}
+
+function playSound(type) {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const master = audioCtx.createGain();
+  master.gain.value = 0.15;
+  master.connect(audioCtx.destination);
+
+  if (type === "shoot") {
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(880, t);
+    osc.frequency.exponentialRampToValueAtTime(220, t + 0.1);
+    g.gain.setValueAtTime(0.3, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+    osc.connect(g); g.connect(master);
+    osc.start(t); osc.stop(t + 0.1);
+  }
+  else if (type === "hit") {
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = "square";
+    osc.frequency.setValueAtTime(200, t);
+    osc.frequency.exponentialRampToValueAtTime(60, t + 0.2);
+    g.gain.setValueAtTime(0.4, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+    osc.connect(g); g.connect(master);
+    osc.start(t); osc.stop(t + 0.2);
+  }
+  else if (type === "explode") {
+    // Noise burst
+    const bufferSize = audioCtx.sampleRate * 0.3;
+    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+    }
+    const src = audioCtx.createBufferSource();
+    src.buffer = buffer;
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.5, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+    src.connect(g); g.connect(master);
+    src.start(t);
+  }
+  else if (type === "shield") {
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(600, t);
+    osc.frequency.exponentialRampToValueAtTime(200, t + 0.15);
+    g.gain.setValueAtTime(0.3, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+    osc.connect(g); g.connect(master);
+    osc.start(t); osc.stop(t + 0.15);
+  }
+  else if (type === "death") {
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(400, t);
+    osc.frequency.exponentialRampToValueAtTime(30, t + 1.0);
+    g.gain.setValueAtTime(0.5, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 1.0);
+    osc.connect(g); g.connect(master);
+    osc.start(t); osc.stop(t + 1.0);
+  }
+  else if (type === "boost") {
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(150, t);
+    osc.frequency.linearRampToValueAtTime(300, t + 0.2);
+    g.gain.setValueAtTime(0.2, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+    osc.connect(g); g.connect(master);
+    osc.start(t); osc.stop(t + 0.3);
+  }
+}
+
+// Ambient engine hum (loops)
+let engineHum = null;
+function startEngineHum() {
+  if (!audioCtx || engineHum) return;
+  const osc = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  osc.type = "triangle";
+  osc.frequency.value = 55;
+  g.gain.value = 0.04;
+  osc.connect(g);
+  g.connect(audioCtx.destination);
+  osc.start();
+  engineHum = { osc, gain: g };
+}
+
+function stopEngineHum() {
+  if (engineHum) {
+    engineHum.osc.stop();
+    engineHum = null;
+  }
+}
+
+// ============================================================
+// NETWORKING (WebRTC)
+// ============================================================
+
+const ICE_SERVERS = [{ urls: "stun:stun.l.google.com:19302" }];
+let netHostPcs = [];
+let netPc = null;
+let netPeers = [];
+let netRemoteInputs = {};
+let netLatestSnap = null;
+let netConnectedCount = 0;
+let netSnapInterval = null;
+
+function compressSDP(sdp) {
+  return btoa(unescape(encodeURIComponent(JSON.stringify(sdp))));
+}
+function decompressSDP(code) {
+  try { return JSON.parse(decodeURIComponent(escape(atob(code.trim())))); }
+  catch(e) { return null; }
+}
+
+const overlay = document.getElementById("sdp-overlay");
+const sdpOut = document.getElementById("sdp-out");
+const sdpIn = document.getElementById("sdp-in");
+const sdpStatus = document.getElementById("sdp-status");
+const sdpTitle = document.getElementById("sdp-title");
+const sdpDesc = document.getElementById("sdp-desc");
+const sdpPasteLabel = document.getElementById("sdp-paste-label");
+const sdpCopyBtn = document.getElementById("sdp-copy");
+const sdpConnectBtn = document.getElementById("sdp-connect");
+
+function showOverlay() { overlay.classList.add("active"); }
+function hideOverlay() { overlay.classList.remove("active"); sdpIn.value = ""; sdpOut.value = ""; sdpStatus.textContent = ""; }
+
+function copyCode() {
+  sdpOut.select();
+  navigator.clipboard.writeText(sdpOut.value).then(() => {
+    sdpStatus.textContent = "Copied!";
+    sdpStatus.className = "status";
+  });
+}
+
+function cancelNet() {
+  hideOverlay();
+  cleanupNet();
+  gameState = "menu";
+  showMenu();
+}
+
+function cleanupNet() {
+  if (netSnapInterval) { clearInterval(netSnapInterval); netSnapInterval = null; }
+  netHostPcs.forEach(p => { try { p.pc.close(); } catch(e){} });
+  if (netPc) { try { netPc.close(); } catch(e){} }
+  netPeers = []; netHostPcs = []; netPc = null;
+  netMode = null; netRemoteInputs = {}; netLatestSnap = null; netConnectedCount = 0;
+}
+
+// Host flow
+async function startNetHost() {
+  ensureAudio();
+  cleanupNet();
+  netMode = "host";
+  netMyId = 0;
+  hideMenu();
+  await createHostOffer();
+}
+
+async function createHostOffer() {
+  const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  const dc = pc.createDataChannel("game", { ordered: false, maxRetransmits: 0 });
+  const peerId = netHostPcs.length + 1;
+  const peer = { pc, dc, id: peerId, ready: false, input: null };
+  netHostPcs.push(peer);
+
+  dc.onopen = () => {
+    peer.ready = true;
+    netConnectedCount++;
+    dc.send(JSON.stringify({ t: "assign", id: peerId, name: PLAYER_NAMES[peerId] }));
+    sdpStatus.textContent = `${PLAYER_NAMES[peerId]} connected! ${netConnectedCount + 1} players total.`;
+  };
+
+  dc.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.t === "input") { peer.input = msg; }
+    } catch(err) {}
+  };
+
+  dc.onclose = () => {
+    peer.ready = false;
+    netConnectedCount = netHostPcs.filter(p => p.ready).length;
+  };
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  await new Promise(resolve => {
+    if (pc.iceGatheringState === "complete") return resolve();
+    pc.onicecandidate = e => { if (!e.candidate) resolve(); };
+    setTimeout(resolve, 3000);
+  });
+
+  const code = compressSDP(pc.localDescription);
+  sdpTitle.textContent = `HOST — Share code with ${PLAYER_NAMES[peerId]}`;
+  sdpDesc.textContent = "Copy the code below and send it to your teammate. Then paste their response code.";
+  sdpOut.value = code;
+  sdpOut.style.display = "";
+  sdpCopyBtn.style.display = "";
+  sdpPasteLabel.textContent = `Paste ${PLAYER_NAMES[peerId]}'s response:`;
+  sdpIn.value = "";
+  sdpIn.style.display = "";
+  sdpConnectBtn.textContent = "Connect";
+  sdpConnectBtn.style.display = "";
+  sdpConnectBtn.onclick = () => submitHostAnswer(peer);
+  showOverlay();
+}
+
+async function submitHostAnswer(peer) {
+  const code = sdpIn.value.trim();
+  if (!code) { sdpStatus.textContent = "Paste the response code first!"; sdpStatus.className = "status error"; return; }
+  const answer = decompressSDP(code);
+  if (!answer) { sdpStatus.textContent = "Invalid code!"; sdpStatus.className = "status error"; return; }
+  try {
+    await peer.pc.setRemoteDescription(answer);
+    sdpStatus.textContent = "Connecting...";
+    sdpStatus.className = "status";
+    setTimeout(() => {
+      if (peer.ready) {
+        if (netHostPcs.length < MAX_PLAYERS - 1) {
+          sdpStatus.textContent = "Connected! Add another player or start.";
+          sdpConnectBtn.textContent = "Add Player";
+          sdpConnectBtn.onclick = () => createHostOffer();
+          let sb = document.getElementById("sdp-start");
+          if (!sb) {
+            sb = document.createElement("button");
+            sb.textContent = "Start Game";
+            sb.id = "sdp-start";
+            sb.onclick = () => hostLaunchGame();
+            sdpConnectBtn.parentElement.appendChild(sb);
+          }
+        } else {
+          hostLaunchGame();
+        }
+      } else {
+        sdpStatus.textContent = "Connection failed. Try again.";
+        sdpStatus.className = "status error";
+      }
+    }, 2000);
+  } catch(e) {
+    sdpStatus.textContent = "Failed: " + e.message;
+    sdpStatus.className = "status error";
+  }
+}
+
+function hostLaunchGame() {
+  const sb = document.getElementById("sdp-start");
+  if (sb) sb.remove();
+  hideOverlay();
+  initGame(1 + netHostPcs.filter(p => p.ready).length);
+
+  netSnapInterval = setInterval(() => {
+    if (netMode !== "host" || gameState !== "playing") return;
+    const snap = buildSnapshot();
+    const msg = JSON.stringify(snap);
+    netHostPcs.forEach(p => {
+      if (p.ready && p.dc.readyState === "open") {
+        try { p.dc.send(msg); } catch(e) {}
+      }
+    });
+  }, 1000 / SNAPSHOT_RATE);
+}
+
+function buildSnapshot() {
+  return {
+    t: "state",
+    players: players.map(p => ({
+      id: p.id,
+      px: Math.round(p.position.x * 10) / 10,
+      py: Math.round(p.position.y * 10) / 10,
+      pz: Math.round(p.position.z * 10) / 10,
+      rx: Math.round(p.rotation.x * 1000) / 1000,
+      ry: Math.round(p.rotation.y * 1000) / 1000,
+      rz: Math.round(p.rotation.z * 1000) / 1000,
+      shield: Math.round(p.shield),
+      hull: Math.round(p.hull),
+      alive: p.alive,
+      boost: Math.round(p.boost),
+    })),
+    debris: debris.map(d => ({
+      id: d.id,
+      px: Math.round(d.position.x * 10) / 10,
+      py: Math.round(d.position.y * 10) / 10,
+      pz: Math.round(d.position.z * 10) / 10,
+      size: Math.round(d.size * 10) / 10,
+      hp: Math.round(d.hp),
+    })),
+    projectiles: projectiles.map(p => ({
+      px: Math.round(p.position.x * 10) / 10,
+      py: Math.round(p.position.y * 10) / 10,
+      pz: Math.round(p.position.z * 10) / 10,
+      owner: p.owner,
+    })),
+    depth: Math.round(depthKm * 10) / 10,
+    score: Math.round(players.reduce((s, p) => s + p.score, 0)),
+    time: Math.round(elapsedTime),
+  };
+}
+
+// Client flow
+async function startNetClient() {
+  ensureAudio();
+  cleanupNet();
+  netMode = "client";
+  hideMenu();
+
+  sdpTitle.textContent = "JOIN — Paste host's code";
+  sdpDesc.textContent = "Paste the code from the host, then click Connect.";
+  sdpOut.value = "";
+  sdpOut.style.display = "none";
+  sdpCopyBtn.style.display = "none";
+  sdpPasteLabel.textContent = "Host's code:";
+  sdpIn.value = "";
+  sdpIn.style.display = "";
+  sdpConnectBtn.textContent = "Connect";
+  sdpConnectBtn.style.display = "";
+  sdpConnectBtn.onclick = submitClientOffer;
+  showOverlay();
+}
+
+async function submitClientOffer() {
+  const offerCode = sdpIn.value.trim();
+  if (!offerCode) { sdpStatus.textContent = "Paste the host's code!"; sdpStatus.className = "status error"; return; }
+  const offer = decompressSDP(offerCode);
+  if (!offer) { sdpStatus.textContent = "Invalid code!"; sdpStatus.className = "status error"; return; }
+
+  netPc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+
+  netPc.ondatachannel = (e) => {
+    const dc = e.channel;
+    netPeers = [dc];
+    dc.onopen = () => { sdpStatus.textContent = "Connected! Waiting for host to start..."; };
+    dc.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data);
+        if (msg.t === "state") {
+          netLatestSnap = msg;
+          if (gameState !== "playing") {
+            initGame(msg.players.length);
+          }
+        } else if (msg.t === "assign") {
+          netMyId = msg.id;
+        }
+      } catch(err) {}
+    };
+    dc.onclose = () => {
+      netLatestSnap = null;
+      cleanupNet();
+      gameState = "gameover";
+      showGameOver("Host disconnected");
+    };
+  };
+
+  try {
+    await netPc.setRemoteDescription(offer);
+    const answer = await netPc.createAnswer();
+    await netPc.setLocalDescription(answer);
+    await new Promise(resolve => {
+      if (netPc.iceGatheringState === "complete") return resolve();
+      netPc.onicecandidate = e => { if (!e.candidate) resolve(); };
+      setTimeout(resolve, 3000);
+    });
+
+    const code = compressSDP(netPc.localDescription);
+    sdpOut.style.display = "";
+    sdpCopyBtn.style.display = "";
+    sdpOut.value = code;
+    sdpTitle.textContent = "JOIN — Send this code to the host";
+    sdpDesc.textContent = "Copy this code and send it back to the host.";
+    sdpPasteLabel.textContent = "";
+    sdpIn.style.display = "none";
+    sdpConnectBtn.style.display = "none";
+
+    const waitDc = setInterval(() => {
+      if (netPeers.length > 0 && netPeers[0].readyState === "open") {
+        clearInterval(waitDc);
+        hideOverlay();
+      }
+    }, 200);
+    setTimeout(() => clearInterval(waitDc), 30000);
+  } catch(e) {
+    sdpStatus.textContent = "Failed: " + e.message;
+    sdpStatus.className = "status error";
+  }
+}
+
+// Client sends input to host
+let clientSendInterval = null;
+function startClientInputSend() {
+  if (clientSendInterval) clearInterval(clientSendInterval);
+  clientSendInterval = setInterval(() => {
+    if (netMode !== "client" || !netPeers[0] || netPeers[0].readyState !== "open") return;
+    const p = localPlayer;
+    netPeers[0].send(JSON.stringify({
+      t: "input",
+      w: keys["KeyW"] || keys["ArrowUp"] || false,
+      s: keys["KeyS"] || keys["ArrowDown"] || false,
+      a: keys["KeyA"] || keys["ArrowLeft"] || false,
+      d: keys["KeyD"] || keys["ArrowRight"] || false,
+      fire: mouseDown,
+      boost: keys["ShiftLeft"] || keys["ShiftRight"] || false,
+      rx: localPlayer.rotation.x,
+      ry: localPlayer.rotation.y,
+    }));
+  }, 1000 / SNAPSHOT_RATE);
+}
+
+// ============================================================
+// DEBRIS FIELD GENERATOR
+// ============================================================
+
+let debrisIdCounter = 0;
+const debrisMeshPool = [];
+const debrisGeometries = [];
+
+// Pre-create a few debris geometries for variety
+function initDebrisGeometries() {
+  debrisGeometries.push(new THREE.IcosahedronGeometry(1, 1));
+  debrisGeometries.push(new THREE.IcosahedronGeometry(1, 0));
+  debrisGeometries.push(new THREE.DodecahedronGeometry(1, 0));
+  debrisGeometries.push(new THREE.OctahedronGeometry(1, 0));
+}
+
+const debrisMaterials = [
+  new THREE.MeshStandardMaterial({ color: 0xaaccee, roughness: 0.6, metalness: 0.1 }),
+  new THREE.MeshStandardMaterial({ color: 0x8899bb, roughness: 0.7, metalness: 0.05 }),
+  new THREE.MeshStandardMaterial({ color: 0xbbddff, roughness: 0.5, metalness: 0.15 }),
+  new THREE.MeshStandardMaterial({ color: 0x99aabb, roughness: 0.8, metalness: 0.0 }),
+];
+
+function spawnDebris(position, size) {
+  const geo = debrisGeometries[Math.floor(Math.random() * debrisGeometries.length)];
+  const mat = debrisMaterials[Math.floor(Math.random() * debrisMaterials.length)];
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.scale.set(size, size * (0.6 + Math.random() * 0.8), size * (0.6 + Math.random() * 0.8));
+  mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+  mesh.position.copy(position);
+  scene.add(mesh);
+
+  const d = {
+    id: debrisIdCounter++,
+    mesh,
+    position: position.clone(),
+    velocity: new THREE.Vector3(
+      (Math.random() - 0.5) * 2,
+      (Math.random() - 0.5) * 2,
+      (Math.random() - 0.5) * 2
+    ),
+    rotationSpeed: new THREE.Vector3(
+      (Math.random() - 0.5) * 0.5,
+      (Math.random() - 0.5) * 0.5,
+      (Math.random() - 0.5) * 0.5
+    ),
+    size,
+    hp: size * DEBRIS_HP_PER_SIZE,
+    maxHp: size * DEBRIS_HP_PER_SIZE,
+  };
+  debris.push(d);
+  return d;
+}
+
+function generateDebrisAround(center, count, radius) {
+  for (let i = 0; i < count; i++) {
+    const angle1 = Math.random() * Math.PI * 2;
+    const angle2 = Math.acos(2 * Math.random() - 1);
+    const r = radius * (0.3 + Math.random() * 0.7);
+    const pos = new THREE.Vector3(
+      center.x + r * Math.sin(angle2) * Math.cos(angle1),
+      center.y + r * Math.sin(angle2) * Math.sin(angle1),
+      center.z - r * Math.cos(angle2) - DEBRIS_SPAWN_DISTANCE * 0.5
+    );
+    const size = DEBRIS_MIN_SIZE + Math.random() * (DEBRIS_MAX_SIZE - DEBRIS_MIN_SIZE);
+    // Bias toward smaller rocks
+    const biasedSize = DEBRIS_MIN_SIZE + Math.pow(Math.random(), 2) * (DEBRIS_MAX_SIZE - DEBRIS_MIN_SIZE);
+    spawnDebris(pos, biasedSize);
+  }
+}
+
+function manageDebris(playerPos, dt) {
+  // Calculate desired count based on depth
+  const desiredCount = DEBRIS_BASE_COUNT + Math.floor(depthKm * DEBRIS_PER_KM);
+
+  // Remove debris that's too far behind
+  for (let i = debris.length - 1; i >= 0; i--) {
+    const d = debris[i];
+    const dist = d.position.distanceTo(playerPos);
+    if (d.position.z > playerPos.z + DEBRIS_DESPAWN_DISTANCE || dist > DEBRIS_SPAWN_DISTANCE * 1.5) {
+      scene.remove(d.mesh);
+      debris.splice(i, 1);
+    }
+  }
+
+  // Spawn new debris ahead
+  const deficit = desiredCount - debris.length;
+  if (deficit > 0) {
+    const spawnCount = Math.min(deficit, 5); // Don't spawn too many at once
+    for (let i = 0; i < spawnCount; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const r = Math.random() * 150;
+      const pos = new THREE.Vector3(
+        playerPos.x + Math.cos(angle) * r,
+        playerPos.y + (Math.random() - 0.5) * 100,
+        playerPos.z - DEBRIS_SPAWN_DISTANCE + Math.random() * 100
+      );
+      const biasedSize = DEBRIS_MIN_SIZE + Math.pow(Math.random(), 2) * (DEBRIS_MAX_SIZE - DEBRIS_MIN_SIZE);
+      spawnDebris(pos, biasedSize);
+    }
+  }
+
+  // Update debris positions and rotations
+  for (const d of debris) {
+    d.position.add(d.velocity.clone().multiplyScalar(dt));
+    d.mesh.position.copy(d.position);
+    d.mesh.rotation.x += d.rotationSpeed.x * dt;
+    d.mesh.rotation.y += d.rotationSpeed.y * dt;
+    d.mesh.rotation.z += d.rotationSpeed.z * dt;
+  }
+}
+
+// ============================================================
+// PHYSICS & NAVIGATION
+// ============================================================
+
+const _forward = new THREE.Vector3();
+const _right = new THREE.Vector3();
+const _up = new THREE.Vector3(0, 1, 0);
+const _moveDir = new THREE.Vector3();
+const _quat = new THREE.Quaternion();
+
+function updatePlayerPhysics(player, dt, inputOverride) {
+  if (!player.alive) {
+    player.respawnTimer -= dt;
+    if (player.respawnTimer <= 0) {
+      player.alive = true;
+      player.shield = SHIELD_MAX;
+      player.hull = HULL_MAX;
+      player.invulnTimer = 3;
+    }
+    return;
+  }
+
+  if (player.invulnTimer > 0) player.invulnTimer -= dt;
+
+  // Get input (local or remote)
+  const input = inputOverride || {
+    w: keys["KeyW"] || keys["ArrowUp"],
+    s: keys["KeyS"] || keys["ArrowDown"],
+    a: keys["KeyA"] || keys["ArrowLeft"],
+    d: keys["KeyD"] || keys["ArrowRight"],
+    fire: mouseDown,
+    boost: keys["ShiftLeft"] || keys["ShiftRight"],
+  };
+
+  // Mouse rotation (local player only, not from input override)
+  if (!inputOverride) {
+    player.rotation.y -= mouseDX * MOUSE_SENSITIVITY;
+    player.rotation.x -= mouseDY * MOUSE_SENSITIVITY;
+    player.rotation.x = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, player.rotation.x));
+    mouseDX = 0;
+    mouseDY = 0;
+  } else if (inputOverride.rx !== undefined) {
+    player.rotation.x = inputOverride.rx;
+    player.rotation.y = inputOverride.ry;
+  }
+
+  // Build direction vectors from rotation
+  _quat.setFromEuler(player.rotation);
+  _forward.set(0, 0, -1).applyQuaternion(_quat);
+  _right.set(1, 0, 0).applyQuaternion(_quat);
+
+  // Movement
+  const isBoosting = input.boost && player.boost > 0;
+  const speed = isBoosting ? BOOST_SPEED : MOVE_SPEED;
+
+  _moveDir.set(0, 0, 0);
+  if (input.w) _moveDir.add(_forward);
+  if (input.s) _moveDir.sub(_forward);
+  if (input.a) _moveDir.sub(_right);
+  if (input.d) _moveDir.add(_right);
+
+  if (_moveDir.lengthSq() > 0) {
+    _moveDir.normalize().multiplyScalar(speed * dt);
+    player.velocity.add(_moveDir);
+  }
+
+  // Always drift forward into the cloud
+  player.velocity.z -= FORWARD_SPEED * dt;
+
+  // Boost
+  if (isBoosting) {
+    player.boost = Math.max(0, player.boost - BOOST_DRAIN * dt);
+  } else {
+    player.boost = Math.min(BOOST_MAX, player.boost + BOOST_REGEN * dt);
+  }
+
+  // Damping
+  player.velocity.multiplyScalar(DRIFT_DAMPING);
+
+  // Apply velocity
+  player.position.add(player.velocity.clone().multiplyScalar(dt));
+
+  // Shield regen
+  if (elapsedTime - player.lastHitTime > SHIELD_REGEN_DELAY) {
+    player.shield = Math.min(SHIELD_MAX, player.shield + SHIELD_REGEN * dt);
+  }
+
+  // Depth
+  player.depth = Math.abs(player.position.z) * DEPTH_SCALE;
+
+  // Firing
+  player.fireCooldown -= dt;
+  if (input.fire && player.fireCooldown <= 0) {
+    fireProjectile(player);
+    player.fireCooldown = FIRE_COOLDOWN;
+  }
+}
+
+// ============================================================
+// COMBAT SYSTEM
+// ============================================================
+
+const projectileGeo = new THREE.SphereGeometry(0.15, 4, 4);
+const projectileMat = new THREE.MeshBasicMaterial({ color: 0x88ddff });
+
+function fireProjectile(player) {
+  _quat.setFromEuler(player.rotation);
+  const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(_quat);
+
+  const proj = {
+    position: player.position.clone().add(dir.clone().multiplyScalar(3)),
+    velocity: dir.multiplyScalar(PROJECTILE_SPEED).add(player.velocity),
+    owner: player.id,
+    life: PROJECTILE_LIFETIME,
+    mesh: new THREE.Mesh(projectileGeo, projectileMat.clone()),
+  };
+  // Projectile trail light
+  const light = new THREE.PointLight(PLAYER_COLORS[player.id] || 0x88ddff, 2, 15);
+  proj.mesh.add(light);
+  proj.mesh.position.copy(proj.position);
+  scene.add(proj.mesh);
+  projectiles.push(proj);
+  playSound("shoot");
+}
+
+function updateProjectiles(dt) {
+  for (let i = projectiles.length - 1; i >= 0; i--) {
+    const p = projectiles[i];
+    p.position.add(p.velocity.clone().multiplyScalar(dt));
+    p.mesh.position.copy(p.position);
+    p.life -= dt;
+
+    if (p.life <= 0) {
+      scene.remove(p.mesh);
+      projectiles.splice(i, 1);
+      continue;
+    }
+
+    // Check collision with debris
+    for (let j = debris.length - 1; j >= 0; j--) {
+      const d = debris[j];
+      const dist = p.position.distanceTo(d.position);
+      if (dist < d.size * 0.7) {
+        // Hit!
+        d.hp -= PROJECTILE_DAMAGE;
+        createImpactEffect(p.position.clone(), 0x88ddff);
+
+        scene.remove(p.mesh);
+        projectiles.splice(i, 1);
+
+        if (d.hp <= 0) {
+          destroyDebris(d, j);
+          // Score for the shooter
+          const shooter = players.find(pl => pl.id === p.owner);
+          if (shooter) shooter.score += Math.round(d.size * 10);
+        }
+        break;
+      }
+    }
+  }
+}
+
+function destroyDebris(d, index) {
+  createExplosion(d.position.clone(), d.size);
+  scene.remove(d.mesh);
+  debris.splice(index, 1);
+  playSound("explode");
+
+  // Fragment into smaller pieces if big enough
+  if (d.size > DEBRIS_MIN_SIZE * 2) {
+    const fragCount = 2 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < fragCount; i++) {
+      const fragSize = d.size * (0.2 + Math.random() * 0.3);
+      if (fragSize >= DEBRIS_MIN_SIZE) {
+        const offset = new THREE.Vector3(
+          (Math.random() - 0.5) * d.size,
+          (Math.random() - 0.5) * d.size,
+          (Math.random() - 0.5) * d.size
+        );
+        const frag = spawnDebris(d.position.clone().add(offset), fragSize);
+        // Fragments fly outward
+        frag.velocity.add(offset.normalize().multiplyScalar(5 + Math.random() * 10));
+      }
+    }
+  }
+}
+
+// ============================================================
+// DAMAGE SYSTEM
+// ============================================================
+
+function checkPlayerCollisions(player) {
+  if (!player.alive || player.invulnTimer > 0) return;
+
+  for (let i = debris.length - 1; i >= 0; i--) {
+    const d = debris[i];
+    const dist = player.position.distanceTo(d.position);
+    const collisionDist = d.size * 0.6 + 1.5;
+
+    if (dist < collisionDist) {
+      // Collision!
+      player.lastHitTime = elapsedTime;
+
+      if (player.shield > 0) {
+        player.shield -= COLLISION_SHIELD_DAMAGE;
+        if (player.shield < 0) {
+          // Overflow damage to hull
+          player.hull += player.shield; // shield is negative
+          player.shield = 0;
+        }
+        playSound("shield");
+        flashShieldBubble(player);
+      } else {
+        player.hull -= COLLISION_HULL_DAMAGE;
+        playSound("hit");
+      }
+
+      flashDamage();
+
+      // Push player away
+      const pushDir = player.position.clone().sub(d.position).normalize();
+      player.velocity.add(pushDir.multiplyScalar(15));
+
+      // Damage or destroy the debris too
+      d.hp -= 30;
+      if (d.hp <= 0) {
+        destroyDebris(d, i);
+      }
+
+      // Check death
+      if (player.hull <= 0) {
+        player.hull = 0;
+        player.alive = false;
+        player.respawnTimer = 3;
+        playSound("death");
+        createExplosion(player.position.clone(), 5);
+
+        // In solo mode, game over
+        if (!netMode && players.length === 1) {
+          gameState = "gameover";
+          showGameOver("Hull destroyed");
+        }
+      }
+      break;
+    }
+  }
+}
+
+function flashShieldBubble(player) {
+  if (player.id === netMyId && playerShip) {
+    const shield = playerShip.getObjectByName("shield");
+    if (shield) {
+      shield.material.opacity = 0.3;
+      setTimeout(() => { shield.material.opacity = 0; }, 200);
+    }
+  }
+}
+
+function flashDamage() {
+  const el = document.getElementById("damage-flash");
+  el.style.opacity = "1";
+  setTimeout(() => { el.style.opacity = "0"; }, 150);
+}
+
+// ============================================================
+// EXPLOSIONS & PARTICLES
+// ============================================================
+
+function createExplosion(position, size) {
+  const count = Math.floor(20 + size * 5);
+  const geo = new THREE.BufferGeometry();
+  const positions = new Float32Array(count * 3);
+  const velocities = [];
+
+  for (let i = 0; i < count; i++) {
+    positions[i * 3] = position.x;
+    positions[i * 3 + 1] = position.y;
+    positions[i * 3 + 2] = position.z;
+    velocities.push(new THREE.Vector3(
+      (Math.random() - 0.5) * size * 3,
+      (Math.random() - 0.5) * size * 3,
+      (Math.random() - 0.5) * size * 3
+    ));
+  }
+
+  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  const mat = new THREE.PointsMaterial({
+    color: 0xaaddff, size: 1.5, sizeAttenuation: true,
+    transparent: true, opacity: 1,
+  });
+  const particles = new THREE.Points(geo, mat);
+  scene.add(particles);
+
+  // Light flash
+  const light = new THREE.PointLight(0xaaddff, size * 2, size * 10);
+  light.position.copy(position);
+  scene.add(light);
+
+  explosions.push({
+    particles, light, velocities, life: 1.0, maxLife: 1.0,
+  });
+}
+
+function createImpactEffect(position, color) {
+  const count = 8;
+  const geo = new THREE.BufferGeometry();
+  const positions = new Float32Array(count * 3);
+  const velocities = [];
+
+  for (let i = 0; i < count; i++) {
+    positions[i * 3] = position.x;
+    positions[i * 3 + 1] = position.y;
+    positions[i * 3 + 2] = position.z;
+    velocities.push(new THREE.Vector3(
+      (Math.random() - 0.5) * 10,
+      (Math.random() - 0.5) * 10,
+      (Math.random() - 0.5) * 10
+    ));
+  }
+
+  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  const mat = new THREE.PointsMaterial({
+    color, size: 0.8, sizeAttenuation: true,
+    transparent: true, opacity: 1,
+  });
+  const particles = new THREE.Points(geo, mat);
+  scene.add(particles);
+
+  explosions.push({
+    particles, light: null, velocities, life: 0.3, maxLife: 0.3,
+  });
+}
+
+function updateExplosions(dt) {
+  for (let i = explosions.length - 1; i >= 0; i--) {
+    const e = explosions[i];
+    e.life -= dt;
+    const t = e.life / e.maxLife;
+
+    if (e.life <= 0) {
+      scene.remove(e.particles);
+      if (e.light) scene.remove(e.light);
+      explosions.splice(i, 1);
+      continue;
+    }
+
+    // Update particle positions
+    const posArr = e.particles.geometry.attributes.position.array;
+    for (let j = 0; j < e.velocities.length; j++) {
+      posArr[j * 3] += e.velocities[j].x * dt;
+      posArr[j * 3 + 1] += e.velocities[j].y * dt;
+      posArr[j * 3 + 2] += e.velocities[j].z * dt;
+      e.velocities[j].multiplyScalar(0.95);
+    }
+    e.particles.geometry.attributes.position.needsUpdate = true;
+    e.particles.material.opacity = t;
+    if (e.light) e.light.intensity = t * e.light.intensity;
+  }
+}
+
+// ============================================================
+// PROGRESSION & SCORING
+// ============================================================
+
+function getDifficultyMultiplier() {
+  // Ramps up with depth
+  return 1 + depthKm * 0.1;
+}
+
+// ============================================================
+// HUD
+// ============================================================
+
+const hudEl = document.getElementById("hud");
+const shieldBar = document.getElementById("shield-bar");
+const hullBar = document.getElementById("hull-bar");
+const boostBar = document.getElementById("boost-bar");
+const depthEl = document.getElementById("depth-display");
+const scoreEl = document.getElementById("score-display");
+const speedEl = document.getElementById("speed-display");
+const playersHud = document.getElementById("players-hud");
+
+function updateHUD() {
+  const p = localPlayer;
+  shieldBar.style.width = Math.max(0, (p.shield / SHIELD_MAX) * 100) + "%";
+  hullBar.style.width = Math.max(0, (p.hull / HULL_MAX) * 100) + "%";
+  boostBar.style.width = Math.max(0, (p.boost / BOOST_MAX) * 100) + "%";
+
+  // Color shields bar based on level
+  if (p.shield < 25) shieldBar.style.background = "#ff4444";
+  else if (p.shield < 50) shieldBar.style.background = "#ffaa44";
+  else shieldBar.style.background = "#4488ff";
+
+  depthEl.textContent = depthKm.toFixed(1) + " km";
+  const totalScore = players.reduce((s, pl) => s + pl.score, 0);
+  scoreEl.textContent = totalScore.toLocaleString() + " pts";
+  speedEl.textContent = Math.round(p.velocity.length()) + " m/s";
+
+  // Multiplayer player list
+  if (players.length > 1) {
+    let html = "";
+    for (const pl of players) {
+      const color = "#" + PLAYER_COLORS[pl.id].toString(16).padStart(6, "0");
+      const status = pl.alive ? `S:${Math.round(pl.shield)} H:${Math.round(pl.hull)}` : "DEAD";
+      html += `<div style="color:${color};font-size:11px">${PLAYER_NAMES[pl.id]}: ${status}</div>`;
+    }
+    playersHud.innerHTML = html;
+  }
+}
+
+// ============================================================
+// GAME STATE MANAGEMENT & MENUS
+// ============================================================
+
+const menuOverlay = document.getElementById("menu-overlay");
+
+function showMenu() {
+  menuOverlay.classList.remove("hidden");
+  menuOverlay.innerHTML = `
+    <h1>Cataract</h1>
+    <div class="subtitle">Oort Cloud Survival</div>
+    <button onclick="startSolo()">Solo Mission</button>
+    <button onclick="startNetHost()">Host Co-op</button>
+    <button onclick="startNetClient()">Join Co-op</button>
+  `;
+}
+
+function hideMenu() { menuOverlay.classList.add("hidden"); }
+
+function showGameOver(reason) {
+  const totalScore = players.reduce((s, pl) => s + pl.score, 0);
+  menuOverlay.classList.remove("hidden");
+  menuOverlay.innerHTML = `
+    <h1>Mission Over</h1>
+    <div class="subtitle">${reason || ""}</div>
+    <div id="game-over-stats">
+      Depth: ${depthKm.toFixed(1)} km<br>
+      Score: ${totalScore.toLocaleString()}<br>
+      Time: ${formatTime(elapsedTime)}
+    </div>
+    <button onclick="startSolo()">Try Again</button>
+    <button onclick="backToMenu()">Menu</button>
+  `;
+  hudEl.classList.add("hidden");
+  document.getElementById("crosshair").classList.add("hidden");
+  if (pointerLocked) document.exitPointerLock();
+  stopEngineHum();
+}
+
+function showPause() {
+  document.getElementById("pause-overlay").classList.add("active");
+  if (pointerLocked) document.exitPointerLock();
+}
+
+function hidePause() {
+  document.getElementById("pause-overlay").classList.remove("active");
+}
+
+function formatTime(t) {
+  const m = Math.floor(t / 60);
+  const s = Math.floor(t % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function backToMenu() {
+  cleanupNet();
+  gameState = "menu";
+  clearGameObjects();
+  showMenu();
+}
+
+function clearGameObjects() {
+  // Remove all debris meshes
+  for (const d of debris) scene.remove(d.mesh);
+  debris = [];
+  // Remove all projectiles
+  for (const p of projectiles) scene.remove(p.mesh);
+  projectiles = [];
+  // Remove all explosions
+  for (const e of explosions) {
+    scene.remove(e.particles);
+    if (e.light) scene.remove(e.light);
+  }
+  explosions = [];
+  // Remove remote ships
+  for (const id in remoteShips) {
+    scene.remove(remoteShips[id]);
+    delete remoteShips[id];
+  }
+  if (playerShip) scene.remove(playerShip);
+  playerShip = null;
+}
+
+// ============================================================
+// INIT & START
+// ============================================================
+
+function initGame(numPlayers) {
+  clearGameObjects();
+  hideMenu();
+
+  players = [];
+  for (let i = 0; i < numPlayers; i++) {
+    const p = {
+      id: i,
+      position: new THREE.Vector3((i - (numPlayers - 1) / 2) * 6, 0, 0),
+      velocity: new THREE.Vector3(0, 0, 0),
+      rotation: new THREE.Euler(0, 0, 0, "YXZ"),
+      quaternion: new THREE.Quaternion(),
+      shield: SHIELD_MAX,
+      hull: HULL_MAX,
+      boost: BOOST_MAX,
+      score: 0,
+      depth: 0,
+      alive: true,
+      lastHitTime: -999,
+      fireCooldown: 0,
+      respawnTimer: 0,
+      invulnTimer: 3,
+    };
+    players.push(p);
+  }
+
+  // Point localPlayer reference at our player
+  Object.assign(localPlayer, players[netMyId]);
+  players[netMyId] = localPlayer;
+
+  // Create ship meshes
+  initPlayerShip();
+  for (let i = 0; i < numPlayers; i++) {
+    if (i !== netMyId) {
+      const ship = createShipMesh(PLAYER_COLORS[i]);
+      remoteShips[i] = ship;
+      scene.add(ship);
+    }
+  }
+
+  depthKm = 0;
+  elapsedTime = 0;
+  debrisIdCounter = 0;
+
+  // Initial debris
+  initDebrisGeometries();
+  generateDebrisAround(new THREE.Vector3(0, 0, 0), DEBRIS_BASE_COUNT, DEBRIS_SPAWN_DISTANCE);
+
+  hudEl.classList.remove("hidden");
+  gameState = "playing";
+
+  ensureAudio();
+  startEngineHum();
+
+  if (netMode === "client") startClientInputSend();
+}
+
+function startSolo() {
+  ensureAudio();
+  cleanupNet();
+  netMode = null;
+  netMyId = 0;
+  initGame(1);
+  canvas.requestPointerLock();
+}
+
+// ============================================================
+// CLIENT STATE APPLICATION
+// ============================================================
+
+function applyClientSnapshot(snap) {
+  if (!snap || !snap.players) return;
+
+  // Update all player states from host
+  for (const sp of snap.players) {
+    const p = players[sp.id];
+    if (!p) continue;
+
+    if (sp.id !== netMyId) {
+      // Interpolate remote player positions
+      p.position.lerp(new THREE.Vector3(sp.px, sp.py, sp.pz), 0.3);
+      p.rotation.set(sp.rx, sp.ry, sp.rz);
+    }
+    p.shield = sp.shield;
+    p.hull = sp.hull;
+    p.alive = sp.alive;
+    p.boost = sp.boost;
+  }
+
+  // Update debris (simplified — just sync positions)
+  // In a full implementation we'd match by ID and interpolate
+  depthKm = snap.depth;
+
+  // Score from host
+  if (snap.score !== undefined) {
+    const perPlayer = snap.score / players.length;
+    for (const p of players) p.score = perPlayer;
+  }
+}
+
+// ============================================================
+// DUST PARTICLE UPDATE
+// ============================================================
+
+function updateDust(playerPos) {
+  const posArr = dustParticles.geometry.attributes.position.array;
+  for (let i = 0; i < dustCount; i++) {
+    const ix = i * 3;
+    // Keep dust centered around player
+    let dx = posArr[ix] - playerPos.x;
+    let dy = posArr[ix + 1] - playerPos.y;
+    let dz = posArr[ix + 2] - playerPos.z;
+
+    if (Math.abs(dx) > 100) posArr[ix] = playerPos.x + (Math.random() - 0.5) * 200;
+    if (Math.abs(dy) > 100) posArr[ix + 1] = playerPos.y + (Math.random() - 0.5) * 200;
+    if (Math.abs(dz) > 100) posArr[ix + 2] = playerPos.z + (Math.random() - 0.5) * 200;
+
+    posArr[ix] += dustVelocities[i].x;
+    posArr[ix + 1] += dustVelocities[i].y;
+    posArr[ix + 2] += dustVelocities[i].z;
+  }
+  dustParticles.geometry.attributes.position.needsUpdate = true;
+}
+
+// ============================================================
+// GAME LOOP
+// ============================================================
+
+function gameLoop(time) {
+  requestAnimationFrame(gameLoop);
+
+  const rawDt = lastTime ? (time - lastTime) / 1000 : 0;
+  lastTime = time;
+
+  if (gameState !== "playing") {
+    // Still render the scene for background
+    renderer.render(scene, camera);
+    return;
+  }
+
+  // Cap delta to prevent spiral of death
+  const dt = Math.min(rawDt, 0.05);
+  elapsedTime += dt;
+
+  // Client mode — apply snapshot and only handle local view
+  if (netMode === "client") {
+    if (netLatestSnap) {
+      applyClientSnapshot(netLatestSnap);
+      netLatestSnap = null;
+    }
+    // Still update local rotation for responsive feel
+    localPlayer.rotation.y -= mouseDX * MOUSE_SENSITIVITY;
+    localPlayer.rotation.x -= mouseDY * MOUSE_SENSITIVITY;
+    localPlayer.rotation.x = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, localPlayer.rotation.x));
+    mouseDX = 0;
+    mouseDY = 0;
+  } else {
+    // Host or solo — run full simulation
+
+    // Update all players
+    for (const p of players) {
+      if (p.id === netMyId) {
+        updatePlayerPhysics(p, dt);
+      } else {
+        // Use remote input from WebRTC
+        const peer = netHostPcs.find(hp => hp.id === p.id);
+        const input = peer ? peer.input : null;
+        if (input) updatePlayerPhysics(p, dt, input);
+      }
+    }
+
+    // Depth is based on the lead player's position
+    const maxDepth = Math.max(...players.map(p => Math.abs(p.position.z)));
+    depthKm = maxDepth * DEPTH_SCALE;
+
+    // Debris management
+    manageDebris(localPlayer.position, dt);
+
+    // Projectiles
+    updateProjectiles(dt);
+
+    // Collisions
+    for (const p of players) {
+      checkPlayerCollisions(p);
+    }
+
+    // Check all-dead for co-op gameover
+    if (netMode === "host" && players.every(p => !p.alive)) {
+      gameState = "gameover";
+      showGameOver("All probes destroyed");
+    }
+  }
+
+  // Explosions always update locally
+  updateExplosions(dt);
+
+  // Update dust
+  updateDust(localPlayer.position);
+
+  // Move starfield with player so stars don't drift
+  starfield.position.copy(localPlayer.position);
+
+  // Update ship meshes
+  if (playerShip && localPlayer.alive) {
+    playerShip.position.copy(localPlayer.position);
+    playerShip.quaternion.setFromEuler(localPlayer.rotation);
+    playerShip.visible = true;
+
+    // Engine glow intensity based on speed
+    const engine = playerShip.getObjectByName("engine");
+    if (engine) {
+      const speed = localPlayer.velocity.length();
+      engine.material.opacity = 0.3 + Math.min(0.7, speed / BOOST_SPEED);
+      engine.scale.setScalar(0.5 + Math.min(1.5, speed / BOOST_SPEED));
+    }
+
+    // Invulnerability flash
+    if (localPlayer.invulnTimer > 0) {
+      playerShip.visible = Math.floor(localPlayer.invulnTimer * 10) % 2 === 0;
+    }
+  } else if (playerShip) {
+    playerShip.visible = false;
+  }
+
+  // Update remote ships
+  for (const p of players) {
+    if (p.id !== netMyId && remoteShips[p.id]) {
+      const ship = remoteShips[p.id];
+      ship.position.copy(p.position);
+      ship.quaternion.setFromEuler(p.rotation);
+      ship.visible = p.alive;
+      if (p.invulnTimer > 0) {
+        ship.visible = Math.floor(p.invulnTimer * 10) % 2 === 0;
+      }
+    }
+  }
+
+  // Camera
+  updateCamera();
+
+  // HUD
+  updateHUD();
+
+  // Render
+  renderer.render(scene, camera);
+}
+
+function updateCamera() {
+  const p = localPlayer;
+  const q = new THREE.Quaternion().setFromEuler(p.rotation);
+
+  if (cameraMode === "chase") {
+    const offset = CHASE_OFFSET.clone().applyQuaternion(q);
+    const targetPos = p.position.clone().add(offset);
+    camera.position.lerp(targetPos, 0.1);
+    camera.quaternion.slerp(q, 0.1);
+    camera.lookAt(p.position.clone().add(new THREE.Vector3(0, 0, -1).applyQuaternion(q).multiplyScalar(20)));
+  } else {
+    // Cockpit
+    const offset = COCKPIT_OFFSET.clone().applyQuaternion(q);
+    camera.position.copy(p.position.clone().add(offset));
+    camera.quaternion.copy(q);
+  }
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+
+initDebrisGeometries();
+showMenu();
+requestAnimationFrame(gameLoop);
+
+</script>
+</body>
+</html>
